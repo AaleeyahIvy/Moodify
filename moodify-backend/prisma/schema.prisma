@@ -1,0 +1,263 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OAuthProvider {
+  SPOTIFY
+}
+
+enum RecSource {
+  PROMPT
+  SELECTION
+  BOTH
+}
+
+enum RecStatus {
+  QUEUED
+  RUNNING
+  COMPLETE
+  FAILED
+}
+
+model User {
+  id             String         @id @default(cuid())
+  email          String?        @unique
+  displayName    String?
+  spotifyUserId  String?        @unique
+  imageUrl       String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  tokens         OAuthToken[]
+  playlists      Playlist[]
+  recRequests    RecommendationRequest[]
+  stats               UserStats?
+  trackDiscoveries    UserTrackDiscovery[]
+  favoriteGenres      UserFavoriteGenre[]
+}
+
+model OAuthToken {
+  id          String        @id @default(cuid())
+  userId      String
+  provider    OAuthProvider
+  accessToken String
+  refreshToken String?
+  scope       String?
+  expiresAt   DateTime
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  user        User          @relation(fields: [userId], references: [id])
+
+  @@unique([userId, provider])
+}
+
+model Color {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  hex       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  moods     MoodColor[]
+  // Optional: color-based targets that gently bias recs
+  targetHints Json?
+  recRequests RecommendationRequest[]
+  promptCaches PromptCache[]
+
+}
+
+model Mood {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Audio target defaults for this mood (merged with color + prompt)
+  // Example: { valence: 0.8, energy: 0.7, danceability: 0.75, acousticness: 0.2, instrumentalness: 0.1, tempo: { min: 110, max: 132 } }
+  audioTargets Json
+
+  colors     MoodColor[]
+  genres     MoodGenre[]
+  recommendationRequests RecommendationRequest[]
+  promptCaches PromptCache[]
+
+}
+
+model MoodColor {
+  id        String @id @default(cuid())
+  moodId    String
+  colorId   String
+  weight    Float  // 0..1 weight used to bias targets
+
+  mood      Mood   @relation(fields: [moodId], references: [id])
+  color     Color  @relation(fields: [colorId], references: [id])
+
+  @@unique([moodId, colorId])
+}
+
+model SeedGenre {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique // Must match Spotify "seed_genres"
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  moods     MoodGenre[]
+}
+
+model MoodGenre {
+  id          String    @id @default(cuid())
+  moodId      String
+  seedGenreId String
+  weight      Float     // 0..1 bias for genre when this mood is selected
+
+  mood        Mood      @relation(fields: [moodId], references: [id])
+  seedGenre   SeedGenre @relation(fields: [seedGenreId], references: [id])
+
+  @@unique([moodId, seedGenreId])
+}
+
+model RecommendationRequest {
+  id               String     @id @default(cuid())
+  userId           String?
+  source           RecSource
+  prompt           String?
+  selectedMoodId   String?
+  selectedColorId  String?
+  // The exact seeds and targets used after LLM mapping/merging
+  seedGenres       String[]   // validated Spotify seeds at time of request
+  targetFeatures   Json       // fully-resolved targets sent to Spotify
+  explanation      String?    // human-readable reasoning for user
+  status           RecStatus  @default(QUEUED)
+  createdAt        DateTime   @default(now())
+
+  user             User?      @relation(fields: [userId], references: [id])
+  selectedMood     Mood?      @relation(fields: [selectedMoodId], references: [id])
+  selectedColor    Color?     @relation(fields: [selectedColorId], references: [id])
+
+  result           RecommendationResult?
+  playlist Playlist?
+
+}
+
+model RecommendationResult {
+  id           String  @id @default(cuid())
+  requestId    String  @unique
+  tracksCount  Int
+  createdAt    DateTime @default(now())
+
+  request      RecommendationRequest @relation(fields: [requestId], references: [id])
+  tracks       RecommendationResultTrack[]
+}
+
+model RecommendationResultTrack {
+  id            String  @id @default(cuid())
+  resultId      String
+  position      Int
+  spotifyTrackId String
+
+  result        RecommendationResult @relation(fields: [resultId], references: [id])
+}
+
+model Playlist {
+  id               String   @id @default(cuid())
+  userId           String
+  spotifyPlaylistId String  @unique
+  name             String
+  description      String?
+  requestId        String? @unique
+  createdAt        DateTime @default(now())
+
+  user             User     @relation(fields: [userId], references: [id])
+  request          RecommendationRequest? @relation(fields: [requestId], references: [id])
+}
+
+// Optional cached Track metadata for UI speed and offline explainability
+model TrackCache {
+  spotifyTrackId  String   @id
+  name            String
+  artistNames     String[]
+  albumName       String?
+  imageUrl        String?
+  previewUrl      String?
+  durationMs      Int?
+  audioFeatures   Json?
+  fetchedAt       DateTime @default(now())
+}
+
+// Cache for prompt → {seedGenres, targetFeatures} to avoid re-LLM on repeats
+model PromptCache {
+  id             String   @id @default(cuid())
+  hash           String   @unique // hash(prompt + mood + color + version)
+  prompt         String
+  selectedMoodId String?
+  selectedColorId String?
+  seedGenres     String[]
+  targetFeatures Json
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  selectedMood   Mood?   @relation(fields: [selectedMoodId], references: [id])
+  selectedColor  Color?  @relation(fields: [selectedColorId], references: [id])
+
+}
+// Aggregate user stats (fast reads)
+model UserStats {
+  userId                 String   @id
+  discoveredTracksCount  Int      @default(0)  // unique, interacted discoveries
+  spotifyPlaylistCount   Int      @default(0)  // total playlists from Spotify
+  updatedAt              DateTime @updatedAt
+
+  user                   User     @relation(fields: [userId], references: [id])
+}
+
+// Every track we "discovered" for a user (and what they did)
+model UserTrackDiscovery {
+  id              String   @id @default(cuid())
+  userId          String
+  spotifyTrackId  String
+  requestId       String?  // which rec request surfaced it
+  firstSeenAt     DateTime @default(now())
+  interacted      Boolean  @default(false) // set true on play/save/like
+  addedToPlaylist Boolean  @default(false)
+  savedToLibrary  Boolean  @default(false)
+  playCount       Int      @default(0)
+  lastInteractedAt DateTime?
+
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, spotifyTrackId]) // unique per user
+  @@index([userId, interacted])
+}
+
+// Aggregated favorite genres for quick display
+model UserFavoriteGenre {
+  id        String   @id @default(cuid())
+  userId    String
+  genre     String   // slug or raw genre label (e.g., from Spotify artist.genres)
+  score     Float    // weighted by time range + interactions
+  source    String   // 'spotify-short' | 'spotify-medium' | 'spotify-long' | 'internal'
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, genre, source])
+  @@index([userId, score])
+}
+
