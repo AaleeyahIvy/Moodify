@@ -1,7 +1,7 @@
 import Fastify from 'fastify'
 import dotenv from 'dotenv'
-import { prisma } from './prisma/client.ts'
-import { meRoutes } from './routes/me.ts'
+//import { prisma } from './prisma/client'
+import { meRoutes } from './routes/me'
 
 dotenv.config()
 console.log('Loaded PORT:', process.env.PORT)

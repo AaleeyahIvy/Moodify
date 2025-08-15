@@ -71,10 +71,8 @@ async function seedMoods(prisma: PrismaClient) {
   ];
 
   for (const mood of moods) {
-    await prisma.mood.upsert({
-      where: { slug: mood.slug },
-      update: { description: mood.description, audioTargets: mood.audioTargets },
-      create: { name: mood.name, slug: mood.slug, description: mood.description, audioTargets: mood.audioTargets },
+    await prisma.mood.createMany({
+      data: mood,
     });
   }
 }

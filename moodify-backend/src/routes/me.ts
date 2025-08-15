@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
 import Fastify from 'fastify'
 import fp from "fastify-plugin";
-import { prisma } from "../prisma/client.ts";
+import { prisma } from "../prisma/client";
 
 const fastify = Fastify({
   logger: true
@@ -18,4 +18,17 @@ export const meRoutes = fp(async(fastify: FastifyInstance) => {
 
     return reply.send(user)
   })
+  fastify.get('/test-moods', async () => {
+    return prisma.mood.findMany({
+      include: {
+        colors: { include: { color: true } },
+        genres: { include: { seedGenre: true } }
+      }
+    })
+  })
+  // test route
+fastify.get('/debug/moods', async () => {
+  return prisma.mood.findMany()
+})
+
 })

@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    /* Language & module target */
+    "target": "ES2020",                // Modern JS so Prisma's #private fields parse fine
+    "module": "ESNext",                // For ESM imports/exports
+    "moduleResolution": "Node",        // Node-style resolution for .ts/.js
+
+    /* Compatibility & interop */
+    "esModuleInterop": true,           // Default import behavior for CJS modules
+    "allowSyntheticDefaultImports": true,
+
+    /* Strictness & type safety */
+    "strict": true,                    // All strict mode checks
+    "skipLibCheck": true,               // Don't check node_modules
+
+    /* Path helpers (adjust as needed) */
+    "baseUrl": "./src",
+    "paths": {
+      "@/*": ["*"]
+    },
+
+    /* Output & build */
+    "outDir": "dist",
+    "resolveJsonModule": true,         // Allow importing .json
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

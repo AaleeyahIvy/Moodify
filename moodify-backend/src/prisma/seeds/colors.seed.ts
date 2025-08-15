@@ -13,10 +13,8 @@ async function seedColors(prisma: PrismaClient) {
   ];
 
   for (const color of colors) {
-    await prisma.color.upsert({
-      where: { slug: color.slug },
-      update: { hex: color.hex, targetHints: color.targetHints },
-      create: { name: color.name, slug: color.slug, hex: color.hex, targetHints: color.targetHints },
+    await prisma.color.create({
+      data: color,
     });
   }
 }

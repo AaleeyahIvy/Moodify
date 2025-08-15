@@ -12,10 +12,8 @@ import { PrismaClient } from "@prisma/client";
   ];
 
   for (const genre of seedGenres) {
-    await prisma.seedGenre.upsert({
-      where: { slug: genre },
-      update: {},
-      create: { name: genre.replace(/-/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase()), slug: genre },
+    await prisma.seedGenre.createMany({
+      data: { name: genre.replace(/-/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase()), slug: genre },
     });
   }
 }

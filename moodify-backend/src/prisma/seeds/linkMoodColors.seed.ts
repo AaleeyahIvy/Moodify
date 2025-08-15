@@ -16,10 +16,8 @@ async function linkMoodColors(prisma: PrismaClient) {
     for (const { colorSlug, weight } of entries) {
       const color = await prisma.color.findUnique({ where: { slug: colorSlug } });
       if (!color) continue;
-      await prisma.moodColor.upsert({
-        where: { moodId_colorId: { moodId: mood.id, colorId: color.id } },
-        update: { weight },
-        create: { moodId: mood.id, colorId: color.id, weight },
+      await prisma.moodColor.createMany({
+        data: { moodId: mood.id, colorId: color.id, weight },
       });
     }
   }
